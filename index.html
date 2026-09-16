@@ -9,9 +9,12 @@
 html,body{overscroll-behavior:none}
 
 :root{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#17202a;background:#eef3f7}
-*{box-sizing:border-box} body{margin:0}.app{max-width:520px;margin:auto;min-height:100vh;padding:12px 12px 28px}
-header{background:#0b1724;color:white;border-radius:22px;padding:18px 14px;text-align:center;position:sticky;top:8px;z-index:5}
+*{box-sizing:border-box} body{margin:0}.app{max-width:520px;margin:auto;min-height:100vh;padding:0 12px 28px}
+
+/* Bandeau noir fixe */
+header{background:#0b1724;color:white;border-radius:0 0 22px 22px;padding:18px 14px;text-align:center;position:sticky;top:0;z-index:100;box-shadow:0 4px 12px #00000033}
 h1{font-size:23px;margin:0 0 4px} .sub{opacity:.82;font-size:14px}
+
 .card{background:white;border-radius:20px;padding:18px;margin-top:12px;box-shadow:0 3px 16px #00000012;transition:background 0.2s ease, border-color 0.2s ease}
 .card.in-tune{background:#eafaf1;border:2px solid #2ecc71}
 button{border:0;border-radius:14px;padding:14px 18px;font-size:16px;font-weight:700;cursor:pointer}
@@ -36,7 +39,7 @@ select{padding:10px;border-radius:10px;border:1px solid #ccd4dc;font-size:15px}
 .labels{display:flex;justify-content:center;gap:12px}.labels span{width:70px;font-size:12px;color:#667}
 .noteinfo{font-size:13px;color:#667;text-align:center;margin-top:12px}
 details summary{cursor:pointer;font-weight:700}
-table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:7px;border-bottom:1px solid #e5e9ed;text-align:left}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:7px;border-bottom:1px solid #e5e9ed;text-align:center}th{text-align:center;background:#f8fafc}
 .tip{font-size:13px;line-height:1.45;color:#59636d}@media(max-width:380px){.dial-container{width:200px;height:200px}#note{font-size:38px}.valve,.labels span{width:58px}.valve{height:76px}}
 </style>
 </head>
@@ -99,17 +102,19 @@ table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:7px;borde
     <div class="valve" id="v1">1</div><div class="valve" id="v2">2</div><div class="valve" id="v3">3</div>
   </div>
   <div class="labels"><span>piston 1</span><span>piston 2</span><span>piston 3</span></div>
-  <div class="noteinfo" id="info">Joue une note avec l’embouchure.</div><div class="noteinfo">Plage : Sol grave → Ré aigu</div>
+  <div class="noteinfo" id="info">Joue une note avec l’embouchure.</div><div class="noteinfo">Plage élargie : 140 Hz → 1100 Hz</div>
 </div>
 
 <div class="card">
-<details>
-<summary>Notes et doigtés utilisés</summary>
+<details open>
+<summary>Correspondance des fréquences et doigtés (140 Hz - 1100 Hz)</summary>
+<div style="overflow-x:auto; margin-top:10px;">
 <table>
-<thead><tr><th>Note lue sur la partition (Int. / FR)</th><th>Doigté</th></tr></thead>
+<thead><tr><th>Partition Sib</th><th>Note réelle (Ut)</th><th>Fréquence</th><th>Doigté</th></tr></thead>
 <tbody id="table"></tbody>
 </table>
-<p class="tip">Pour une trompette en Sib, la note affichée correspond exactement à la note écrite sur votre partition (transposée de +1 ton par rapport au son réel joué).</p>
+</div>
+<p class="tip">La fréquence indiquée correspond au son réel produit (Ut). La partition affichée est en Sib (+1 ton).</p>
 </details>
 </div>
 </div>
@@ -160,7 +165,8 @@ function detectPitchInstant(buf,sr){
   if(rms<0.008) return null;
   
   let bestLag=-1,best=-1;
-  const minLag=Math.floor(sr/1050), maxLag=Math.floor(sr/130);
+  // Plage élargie de 140 Hz à 1100 Hz
+  const minLag=Math.floor(sr/1100), maxLag=Math.floor(sr/140);
   for(let lag=minLag;lag<=maxLag;lag++){
     let sum=0;
     for(let i=0;i<size-lag;i++) sum+=buf[i]*buf[i+lag];
@@ -176,7 +182,7 @@ function detectPitchInstant(buf,sr){
   }
   
   const freq = sr/lag;
-  if(freq < 130 || freq > 1100) return null;
+  if(freq < 140 || freq > 1100) return null;
   return freq;
 }
 
@@ -209,7 +215,7 @@ function display(freq){
   const targetRealFreq = midiFreq(realMidi);
   const cents = 1200 * Math.log2(freq / targetRealFreq);
   
-  const ok = writtenMidi >= 60 && writtenMidi <= 86;
+  const ok = writtenMidi >= 57 && writtenMidi <= 88;
   
   noteEl.innerHTML = ok 
     ? `${noteInfo.int} <span id="note-fr">${noteInfo.fr}</span>` 
@@ -239,7 +245,7 @@ function display(freq){
     
   infoEl.textContent = ok 
     ? (fs.length ? "Pistons : " + fs.join(" + ") : " Aucun piston (0)") 
-    : "Essaie une note comprise entre Sol grave et Ré aigu.";
+    : "Note hors plage usuelle.";
 }
 
 function loop(){
@@ -271,15 +277,31 @@ async function toggle(){
  }catch(e){statusEl.textContent="Accès au micro refusé ou indisponible."; console.error(e)}
 }
 
+function renderTable() {
+  let html = "";
+  // Génère la table de 140 Hz à 1050 Hz (MIDI 53 à 86)
+  for (let m = 53; m <= 86; m++) {
+    let f = midiFreq(m);
+    let sibInfo = getNoteNames(m + 2);
+    let realInfo = getNoteNames(m);
+    let fg = fingering[sibInfo.raw] ? (fingering[sibInfo.raw].length ? fingering[sibInfo.raw].join("+") : "0") : "—";
+    html += `<tr>
+      <td><b>${sibInfo.int}</b> (${sibInfo.fr})</td>
+      <td>${realInfo.int} (${realInfo.fr})</td>
+      <td>${f.toFixed(1)} Hz</td>
+      <td><b>${fg}</b></td>
+    </tr>`;
+  }
+  document.getElementById("table").innerHTML = html;
+}
+
 start.onclick=toggle;
 modeEl.onchange=()=>{ buffer=[]; lastDisplayTime=0; };
-tuningEl.onchange=()=>{ A4=parseFloat(tuningEl.value); buffer=[]; lastDisplayTime=0; };
+tuningEl.onchange=()=>{ A4=parseFloat(tuningEl.value); renderTable(); buffer=[]; lastDisplayTime=0; };
 toleranceEl.onchange=()=>{ buffer=[]; lastDisplayTime=0; };
 refreshRateEl.onchange=()=>{ lastDisplayTime=0; };
 
-document.getElementById("table").innerHTML = namesInt.map((n, i) => 
-  `<tr><td><b>${n}</b> / ${namesFr[i]}</td><td>${fingering[n].length ? fingering[n].join(" + ") : "0 (aucun)"}</td></tr>`
-).join("");
+renderTable();
 </script>
 </body>
 </html>
